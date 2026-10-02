@@ -1,57 +1,229 @@
-Kubernetes GitOps Deployment with Argo CD & kOps on AWS
+# Kubernetes GitOps Deployment with Argo CD & kOps on AWS
 
-This repository demonstrates a GitOps continuous delivery setup on AWS using Argo CD and Kubernetes provisioned via kOps.
+This repository demonstrates a **GitOps continuous delivery workflow** on AWS using **Argo CD** and **Kubernetes**, with the Kubernetes cluster provisioned and managed through **kOps**.
 
-🏗️ Architecture Overview
+The project demonstrates how Git can be used as the **single source of truth** for Kubernetes application deployments, while Argo CD continuously monitors the repository and synchronizes the desired state with the Kubernetes cluster.
 
-The GitOps workflow follows an automated declarative deployment pattern:
+---
 
-Developers/DevOps push Kubernetes manifest updates (deployment.yaml, service.yaml, ingress.yaml) to the GitHub repository.
+## 🏗️ Architecture Overview
 
-Argo CD (Deployment Controller) continuously monitors the Git repository for changes.
+The GitOps workflow follows an automated declarative deployment model:
 
-Upon detecting a diff, Argo CD syncs and applies the manifests directly to the Kubernetes cluster (AWS managed via kOps).
+```text
+                    GitHub
+                      │
+                      │ Git Push
+                      ▼
+                Argo CD
+             GitOps Controller
+                      │
+                      │ Sync
+                      ▼
+             Kubernetes Cluster
+                 AWS / kOps
+                      │
+             ┌────────┴────────┐
+             │                 │
+             ▼                 ▼
+        Worker Node 1     Worker Node 2
+             │                 │
+             └────────┬────────┘
+                      ▼
+               Application Pods
+                      │
+                      ▼
+             Kubernetes Service
+                      │
+                      ▼
+                  Users
+```
 
-Users and clients access the deployed applications and Argo CD UI through an AWS Elastic Load Balancer (ELB).
+### Workflow
 
-🛠️️ Tech Stack & Prerequisites
+1. Developers or DevOps engineers push Kubernetes manifest changes to GitHub.
+2. **Argo CD** continuously monitors the Git repository.
+3. Argo CD detects differences between the Git repository and the Kubernetes cluster.
+4. Argo CD synchronizes the desired state with the cluster.
+5. Kubernetes creates or updates the application resources.
+6. Users access the application through the configured Kubernetes Service.
 
-Infrastructure & Tools
+---
 
-Cloud Provider: AWS (EC2, S3, IAM, Route53)
+# ☁️ Infrastructure Architecture
 
-Cluster Management: kOps (Kubernetes Operations)
+The Kubernetes infrastructure is provisioned on AWS using **kOps**.
 
-Container Orchestration: Kubernetes (1 Master Node, 2 Worker Nodes)
+```text
+                         AWS
+                          │
+                         kOps
+                          │
+              ┌───────────┴───────────┐
+              │                       │
+              ▼                       ▼
+        Control Plane            Worker Nodes
+              │                ┌──────────────┐
+              │                │ Worker 1     │
+              │                │ Worker 2     │
+              │                └──────┬───────┘
+              │                       │
+              ▼                       ▼
+        Kubernetes API          Application Pods
+        etcd
+        Scheduler
+        Controller Manager
+```
 
-Continuous Delivery (GitOps): Argo CD
+The infrastructure uses:
 
-Configuration Management: Kubernetes Declarative Manifests (yaml)
+* **EC2** for Kubernetes nodes
+* **S3** for the kOps state store
+* **IAM** for AWS permissions
+* **Route 53** for DNS when required
 
-CLI Prerequisites
+---
 
-Before starting, ensure you have installed and configured:
+# 🔄 GitOps Workflow
 
-AWS CLI (aws configure)
+The complete deployment workflow is:
 
-kubectl
+```text
+Developer
+    │
+    │ git push
+    ▼
+GitHub Repository
+    │
+    │ Repository Monitoring
+    ▼
+Argo CD
+    │
+    │ Synchronization
+    ▼
+Kubernetes Cluster
+    │
+    ▼
+Deployment
+    │
+    ▼
+ReplicaSet
+    │
+    ▼
+Application Pods
+```
 
-kOps CLI
+Git is therefore used as the **desired state**, while Kubernetes represents the **actual running state**.
 
-🚀 Step-by-Step Deployment Guide
+Argo CD continuously helps keep both states synchronized.
 
-1. Provision Kubernetes Cluster with kOps
+---
 
-Set up the S3 state store and create the cluster on AWS:
+# 🛠️ Tech Stack
 
-# Set up environment variables
+## Infrastructure
+
+| Component               | Technology |
+| ----------------------- | ---------- |
+| Cloud Provider          | AWS        |
+| Compute                 | EC2        |
+| Kubernetes Provisioning | kOps       |
+| Kubernetes State Store  | Amazon S3  |
+| Identity & Access       | IAM        |
+| DNS                     | Route 53   |
+
+## Kubernetes & GitOps
+
+| Component               | Technology         |
+| ----------------------- | ------------------ |
+| Container Orchestration | Kubernetes         |
+| GitOps                  | Argo CD            |
+| Version Control         | Git / GitHub       |
+| Configuration           | Kubernetes YAML    |
+| Application Exposure    | Kubernetes Service |
+
+---
+
+# 📋 Prerequisites
+
+Before starting, make sure the following tools are installed and configured:
+
+* **AWS CLI**
+* **kubectl**
+* **kOps**
+* **Git**
+* **Argo CD CLI** *(optional)*
+
+### AWS CLI
+
+```bash
+aws configure
+```
+
+Verify:
+
+```bash
+aws --version
+```
+
+### kubectl
+
+```bash
+kubectl version --client
+```
+
+### kOps
+
+```bash
+kops version
+```
+
+### Git
+
+```bash
+git --version
+```
+
+---
+
+# 🚀 Step-by-Step Deployment
+
+## 1. Provision the Kubernetes Cluster with kOps
+
+Set the required environment variables:
+
+```bash
 export BUCKET_NAME=my-kops-state-store-bucket
 export CLUSTER_NAME=mycluster.k8s.local
+```
 
-# Create S3 Bucket for state store
-aws s3api create-bucket --bucket $BUCKET_NAME --region us-east-1
+---
 
-# Create the cluster configuration (1 Master, 2 Workers)
+## 2. Create the kOps S3 State Store
+
+Create the S3 bucket:
+
+```bash
+aws s3api create-bucket \
+  --bucket $BUCKET_NAME \
+  --region us-east-1
+```
+
+Set the kOps state store:
+
+```bash
+export KOPS_STATE_STORE=s3://$BUCKET_NAME
+```
+
+The state store is used by kOps to maintain the configuration and state of the Kubernetes cluster.
+
+---
+
+# ☸️ 3. Create the Kubernetes Cluster
+
+Create the cluster configuration:
+
+```bash
 kops create cluster \
   --name=$CLUSTER_NAME \
   --state=s3://$BUCKET_NAME \
@@ -60,83 +232,381 @@ kops create cluster \
   --node-size=t3.medium \
   --control-plane-size=t3.medium \
   --control-plane-zones=us-east-1a
+```
 
-# Build and apply cluster configuration
-kops update cluster --name $CLUSTER_NAME --state=s3://$BUCKET_NAME --yes --admin
+This example creates:
 
+```text
+1 Control Plane
+      +
+2 Worker Nodes
+```
 
-Verify cluster readiness:
+Review the cluster configuration:
 
-kops validate cluster --state=s3://$BUCKET_NAME
+```bash
+kops get cluster \
+  --state=s3://$BUCKET_NAME
+```
+
+Apply the configuration:
+
+```bash
+kops update cluster \
+  --name=$CLUSTER_NAME \
+  --state=s3://$BUCKET_NAME \
+  --yes \
+  --admin
+```
+
+---
+
+# 🔍 4. Verify the Kubernetes Cluster
+
+Validate the cluster:
+
+```bash
+kops validate cluster \
+  --state=s3://$BUCKET_NAME
+```
+
+Check the Nodes:
+
+```bash
 kubectl get nodes
+```
 
+Check the Nodes with additional information:
 
-2. Install Argo CD on the Cluster
+```bash
+kubectl get nodes -o wide
+```
 
-Create the argocd namespace and apply installation manifests:
+Check all Pods:
 
+```bash
+kubectl get pods -A
+```
+
+---
+
+# 🚀 5. Install Argo CD
+
+Create the Argo CD namespace:
+
+```bash
 kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
 
+Install Argo CD:
 
-Expose the Argo CD API server via LoadBalancer:
+```bash
+kubectl apply \
+  -n argocd \
+  -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
 
-kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "LoadBalancer"}}'
+Verify the installation:
 
+```bash
+kubectl get pods -n argocd
+```
 
-Retrieve the initial admin password:
+The Argo CD components should progressively reach the:
 
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+```text
+Running
+```
 
+state.
 
-3. Connect Repository & Deploy Application
+---
 
-Access the Argo CD UI via the External LoadBalancer URL.
+# 🌐 6. Expose Argo CD
 
-Log in with admin and the retrieved initial password.
+For this project, Argo CD is exposed using a Kubernetes **LoadBalancer Service**.
 
-Create a new Application targeting your repository (ar-deploy.git):
+Change the Argo CD server Service:
 
-Application Name: my-app
+```bash
+kubectl patch svc argocd-server \
+  -n argocd \
+  -p '{"spec": {"type": "LoadBalancer"}}'
+```
 
-Project: default
+Check the Service:
 
-Sync Policy: Automatic (or Manual)
+```bash
+kubectl get svc -n argocd
+```
 
-Repository URL: https://github.com/<your-username>/<your-repo>.git
+The AWS Load Balancer address will appear in the `EXTERNAL-IP` or equivalent external endpoint field once provisioned.
 
-Path: ./ (or folder containing manifests)
+---
 
-Cluster URL: https://kubernetes.default.svc
+# 🔐 7. Retrieve the Argo CD Admin Password
 
-Namespace: default
+Retrieve the initial administrator password:
 
-📊 Application Status & Verification
+```bash
+kubectl -n argocd get secret \
+  argocd-initial-admin-secret \
+  -o jsonpath="{.data.password}" | base64 -d
+```
 
-Once synced, check the application status from kubectl or the Argo CD UI:
+The default username is:
 
+```text
+admin
+```
+
+Use the Load Balancer endpoint to access the Argo CD web interface.
+
+---
+
+# 🔗 8. Connect GitHub to Argo CD
+
+The Argo CD Application defines the relationship between:
+
+```text
+GitHub Repository
+       │
+       ▼
+    Argo CD
+       │
+       ▼
+Kubernetes Cluster
+```
+
+Example `argocd-application.yaml`:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+  namespace: argocd
+
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/<your-username>/<your-repository>.git
+    targetRevision: main
+    path: .
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+Apply the Application:
+
+```bash
+kubectl apply -f argocd-application.yaml
+```
+
+Check the Application:
+
+```bash
+kubectl get applications -n argocd
+```
+
+---
+
+# 🔄 9. GitOps Synchronization
+
+Once the Argo CD Application is configured, modify one of the Kubernetes manifests.
+
+For example:
+
+```yaml
+spec:
+  replicas: 3
+```
+
+Commit and push the change:
+
+```bash
+git add .
+git commit -m "Scale application to 3 replicas"
+git push origin main
+```
+
+Argo CD detects the change in Git and synchronizes the Kubernetes cluster.
+
+Check the Pods:
+
+```bash
+kubectl get pods
+```
+
+You should see the number of replicas defined in Git reflected in Kubernetes.
+
+---
+
+# 📊 10. Application Verification
+
+Check the Deployment:
+
+```bash
+kubectl get deployments
+```
+
+Check the Pods:
+
+```bash
 kubectl get pods -o wide
+```
+
+Check the Services:
+
+```bash
 kubectl get svc
+```
 
+Check a specific Service:
 
-📂 Repository Structure
+```bash
+kubectl describe svc <service-name>
+```
 
-.
-├── deployment.yaml                            # Deployment manifest for application pods
-├── service.yaml                               # LoadBalancer/NodePort service definitions
-├── ingress.yaml                               # Ingress rules (if applicable)
-├── Architecture.png                           # Diagram illustrating GitOps workflow
-├── ArgoDC.png                                 # Screenshot of Argo CD Dashboard
-├── App-running.png                            # Screenshot of application running
-└── guide_de_d_ploiement_et_r_solution_de_probl_mes.md  # Detailed deployment & troubleshooting guide
+View application logs:
 
+```bash
+kubectl logs <pod-name>
+```
 
-🧹 Cleanup
+---
 
-To avoid incurring AWS charges, tear down all resources when finished:
+# 🧠 GitOps Concepts Demonstrated
 
-# Delete Kubernetes Cluster via kOps
-kops delete cluster --name $CLUSTER_NAME --state=s3://$BUCKET_NAME --yes
+This project demonstrates the following concepts:
 
-# Delete S3 bucket
+| Concept                      | Technology            |
+| ---------------------------- | --------------------- |
+| Cloud Infrastructure         | AWS                   |
+| Kubernetes Provisioning      | kOps                  |
+| Container Orchestration      | Kubernetes            |
+| Continuous Delivery          | Argo CD               |
+| GitOps                       | Argo CD + Git         |
+| Version Control              | GitHub                |
+| Infrastructure State         | Amazon S3             |
+| AWS Identity                 | IAM                   |
+| Application Deployment       | Kubernetes Deployment |
+| Service Discovery / Exposure | Kubernetes Service    |
+| Declarative Configuration    | YAML                  |
+| Self-Healing                 | Argo CD               |
+
+---
+
+# 📂 Repository Structure
+
+```text
+Kubernetes-ArgoCD/
+│
+├── deployment.yaml
+├── service.yaml
+├── argocd-application.yaml
+│
+├── Architecture.png
+├── ArgoDC.png
+├── App-running.png
+│
+├── guide_de_deploiement_et_resolution_de_problemes.md
+│
+└── README.md
+```
+
+### File Description
+
+| File                                                 | Description                          |
+| ---------------------------------------------------- | ------------------------------------ |
+| `deployment.yaml`                                    | Kubernetes Deployment                |
+| `service.yaml`                                       | Kubernetes Service                   |
+| `argocd-application.yaml`                            | Argo CD Application definition       |
+| `Architecture.png`                                   | GitOps architecture diagram          |
+| `ArgoDC.png`                                         | Argo CD dashboard screenshot         |
+| `App-running.png`                                    | Running application screenshot       |
+| `guide_de_deploiement_et_resolution_de_problemes.md` | Deployment and troubleshooting guide |
+| `README.md`                                          | Main project documentation           |
+
+---
+
+# 📸 Project Screenshots
+
+## Architecture
+
+![Architecture](Architecture.png)
+
+## Argo CD Dashboard
+
+![Argo CD](ArgoDC.png)
+
+## Application Running
+
+![Application](App-running.png)
+
+---
+
+# 🔐 Best Practices
+
+For a production environment:
+
+* Restrict AWS Security Groups.
+* Follow the principle of least privilege with IAM.
+* Avoid storing credentials in Git.
+* Use Kubernetes Secrets or a dedicated secrets-management solution.
+* Use private repositories when appropriate.
+* Protect Argo CD administrative access.
+* Use HTTPS for production environments.
+* Monitor AWS resource consumption.
+* Regularly update Kubernetes and Argo CD versions.
+* Separate development, staging, and production environments.
+
+---
+
+> **Note:** Ingress and HTTP/HTTPS routing are intentionally excluded from this project because they are covered in a separate Kubernetes Ingress project.
+
+---
+
+# 🧹 Cleanup
+
+To avoid unnecessary AWS charges, delete the Kubernetes cluster when the lab is finished.
+
+Delete the cluster:
+
+```bash
+kops delete cluster \
+  --name=$CLUSTER_NAME \
+  --state=s3://$BUCKET_NAME \
+  --yes
+```
+
+Delete the kOps state store:
+
+```bash
 aws s3 rb s3://$BUCKET_NAME --force
+```
+
+> ⚠️ Make sure the S3 bucket contains only the kOps state for this lab before deleting it.
+
+
+---
+
+## 👨‍💻 Author
+
+**Boubacar Djibrilla**
+
+Technologies practiced:
+
+**AWS · Kubernetes · kOps · Argo CD · GitOps · Docker · Linux · DevOps**
+
+---
+
+⭐ If you found this project useful, feel free to star the repository.
